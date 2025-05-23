@@ -2,6 +2,10 @@ import sqlite3
 import hashlib
 import PIL
 import streamlit as st
+import cv2
+import av
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+
 from pathlib import Path  # Add this import
 
 # Setting page layout
@@ -186,23 +190,45 @@ else:
                             for box in boxes:
                                 st.write(box.data)
 
-            elif source_radio == settings.VIDEO:
-                try:
-                    helper.play_stored_video(confidence, model)
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
             elif source_radio == settings.WEBCAM:
-                helper.play_webcam(confidence, model)
+                st.subheader("📷 Deteksi Webcam Real-time")
 
-            elif source_radio == settings.RTSP:
-                helper.play_rtsp_stream(confidence, model)
+                is_display_tracker, tracker = helper.display_tracker_options()
 
-            elif source_radio == settings.YOUTUBE:
-                helper.play_youtube_video(confidence, model)
+                class VideoProcessor(VideoProcessorBase):
+                    def __init__(self):
+                        self.model = model
+                        self.conf = confidence
+                        self.tracker = tracker
+                        self.is_display_tracker = is_display_tracker
+
+                    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+                        try:
+                            img = frame.to_ndarray(format="bgr24")
+                            img = cv2.resize(img, (720, int(720 * (9 / 16))))
+                            if self.is_display_tracker:
+                                res = self.model.track(img, conf=self.conf, persist=True, tracker=self.tracker)
+                            else:
+                                res = self.model.predict(img, conf=self.conf)
+                            result_img = res[0].plot()
+                            return av.VideoFrame.from_ndarray(result_img, format="bgr24")
+                        except Exception as e:
+                            print("Error in recv:", e)
+                            return frame
+
+                webrtc_ctx = webrtc_streamer(
+                    key="apel-webcam",
+                    video_processor_factory=VideoProcessor,
+                    media_stream_constraints={"video": True, "audio": False},
+                    async_processing=True
+                )
+
+                if webrtc_ctx.video_processor:
+                    webrtc_ctx.video_processor.conf = confidence
 
             else:
-                st.error("Pilih sumber yang valid!")
+                st.error("Please select a valid source type!")
+
 
         # --- HISTORY SECTION ---
         elif selected_menu == "History":
