@@ -223,6 +223,7 @@ else:
                     async_processing=True
                 )
 
+
                 if webrtc_ctx.video_processor:
                     webrtc_ctx.video_processor.conf = confidence
 
