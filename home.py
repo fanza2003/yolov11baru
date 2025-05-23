@@ -201,6 +201,7 @@ else:
                         self.conf = confidence
                         self.tracker = tracker
                         self.is_display_tracker = is_display_tracker
+                        self.last_frame = None
 
                     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
                         try:
@@ -211,6 +212,7 @@ else:
                             else:
                                 res = self.model.predict(img, conf=self.conf)
                             result_img = res[0].plot()
+                            self.last_frame = result_img  # Save latest frame
                             return av.VideoFrame.from_ndarray(result_img, format="bgr24")
                         except Exception as e:
                             print("Error in recv:", e)
@@ -220,15 +222,31 @@ else:
                     key="apel-webcam",
                     video_processor_factory=VideoProcessor,
                     media_stream_constraints={"video": True, "audio": False},
-                    async_processing=True
+                    async_processing=True,
+                    rtc_configuration=None
                 )
-
 
                 if webrtc_ctx.video_processor:
                     webrtc_ctx.video_processor.conf = confidence
 
-            else:
-                st.error("Please select a valid source type!")
+                    st.markdown("---")
+                    if st.button("📸 Simpan Deteksi Sekarang"):
+                        frame = webrtc_ctx.video_processor.last_frame
+                        if frame is not None:
+                            image = PIL.Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                            st.image(image, caption="📸 Snapshot disimpan", use_column_width=True)
+
+                            if 'history' not in st.session_state:
+                                st.session_state.history = []
+
+                            st.session_state.history.append({
+                                "image": image,
+                                "result": frame,
+                                "boxes": []
+                            })
+                            st.success("Berhasil menyimpan snapshot dari webcam.")
+                        else:
+                            st.warning("Belum ada frame ditangkap.")
 
 
         # --- HISTORY SECTION ---
